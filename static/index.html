@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Geolocation</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+      html, body, #map-canvas {
+        height: 100%;
+        margin: 0px;
+        padding: 0px
+      }
+    </style>
+    <!--
+    Include the maps javascript with sensor=true because this code is using a
+    sensor (a GPS locator) to determine the user's location.
+    See: https://developers.google.com/maps/documentation/javascript/tutorial#Loading_the_Maps_API
+    -->
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true"></script>
+    <script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
+    <script src="vendor/underscore-min.js"></script>
+    <script>
+// Note: This example requires that you consent to location sharing when
+// prompted by your browser. If you see a blank space instead of the map, this
+// is probably because you have denied permission for location sharing.
+
+var map;
+
+var mapData = {};
+
+function initialize() {
+  var mapOptions = {
+    zoom: 12
+  };
+  map = new google.maps.Map(document.getElementById('map-canvas'),
+      mapOptions);
+  mapData.map = map;
+  mapData.markers = [];
+  mapData.timeout = null;
+
+  // Try HTML5 geolocation
+  if(navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(position) {
+      var pos = new google.maps.LatLng(position.coords.latitude,
+                                       position.coords.longitude);
+      mapData.pos = pos;
+      map.setCenter(pos);
+
+      loadMarkersFor(pos);
+    }, function() {
+      handleNoGeolocation(true);
+      loadMarkersFor(map.getCenter());
+    });
+  } else {
+    // Browser doesn't support Geolocation
+    handleNoGeolocation(false);
+  }
+
+  google.maps.event.addListener(map, 'center_changed', function() {
+  if (mapData.timeout !== null) return;
+      mapData.timeout = window.setTimeout(function() {
+         loadMarkersFor(map.getCenter());
+         mapData.timeout = null;
+    }, 500);
+
+  });
+
+}
+
+function handleNoGeolocation(errorFlag) {
+  if (errorFlag) {
+    var content = 'Error: The Geolocation service failed.';
+  } else {
+    var content = 'Error: Your browser doesn\'t support geolocation.';
+  }
+
+  var options = {
+    map: map,
+    position: new google.maps.LatLng(60, 105),
+    content: content
+  };
+
+  var infowindow = new google.maps.InfoWindow(options);
+  map.setCenter(options.position);
+}
+
+google.maps.event.addDomListener(window, 'load', initialize);
+
+// Load the data via promise
+function loadMarkersFor(pos) {
+
+    // {"dis": 0.0002694325200489782, "obj": {"url": "http://wikipedia.org/wiki/United_Faith_Christian_Academy",
+    // "loc": {"type": "Point", "coordinates": [-80.7741, 35.0901]}, "source": "wikipedia",
+    // "title": "United Faith Christian Academy", "_id": "ObjectId('530ad82b624b5c843af9fac1')"}}
+    console.log('Loading entries for '+pos.lat() + ',' + pos.lng());
+    $.ajax({
+      url: "/near/"+pos.lat()+"/"+pos.lng(),
+      success: function( data ) {
+               _.each(mapData.markers, function(m) {
+                m.setMap(null);
+            });
+            markers = [];
+        _.each(data, function(d) {
+
+
+
+        var page = d.obj;
+              var infowindow = new google.maps.InfoWindow({
+                content: '<a href="'+page.url+'"><h3>'+page.title+'</h3><p>Distance: '+d.dis+'</p>'
+               });
+          var coord = page.loc.coordinates;
+          var marker = new google.maps.Marker({
+              position: new google.maps.LatLng(coord[1],coord[0]),
+              map: map,
+              title: page.title
+          });
+          mapData.markers.push(marker);
+          google.maps.event.addListener(marker, 'click', function() {
+            infowindow.open(map,marker);
+          });
+        });
+
+
+      }
+    });
+}
+
+
+
+
+    </script>
+  </head>
+  <body>
+    <div id="map-canvas"></div>
+  </body>
+</html>
