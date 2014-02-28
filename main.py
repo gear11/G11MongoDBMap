@@ -1,13 +1,14 @@
 """`main` is the top level module for your Flask application."""
 
 # Import the Flask Framework
-from flask import Flask, g
+from flask import Flask, g, send_from_directory
 import pymongo
 from bson.son import SON
 import json
 from werkzeug.routing import FloatConverter as BaseFloatConverter
 from flask import Response
 from functools import wraps
+import os
 
 def returns_json(f):
     @wraps(f)
@@ -20,7 +21,7 @@ def returns_json(f):
 class FloatConverter(BaseFloatConverter):
     regex = r'-?\d+(\.\d+)?'
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='web')
 # Note: We don't need to call run() since our application is embedded within
 # the App Engine WSGI application server.
 app.url_map.converters['float'] = FloatConverter
@@ -29,7 +30,8 @@ app.config.update(dict(
     MONGO_DB_HOST='127.0.0.1',
     MONGO_DB_PORT=27017,
     MONGO_DB_NAME='wikip',
-    MONGO_DB_COLL='points'
+    MONGO_DB_COLL='points',
+    DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
 ))
 
 def connect_mongo_db():
@@ -64,3 +66,8 @@ def near(lat, lon):
 def page_not_found(e):
     """Return a custom 404 error."""
     return 'FOO Sorry, Nothing at this URL.', 404
+
+# Custom static data
+@app.route('/dist/g11-maps.min.js')
+def g11_maps_js():
+    return send_from_directory(app.config['DIST_DIR'], 'g11-maps.min.js')
