@@ -1,16 +1,24 @@
 /**
- * A JS file for creating declarative Google Maps
+ * A JS file for creating declarative Google Maps.
+ * 
+ * Depends on the GoogleMaps API, and includes underscore and promisejs, no jQuery required. 20KB min. 
  */
 var _ = require('../bower_components/underscore/underscore.js');
 var promise = require('../bower_components/promise.min/index.js').promise;
-
-// Note: This example requires that you consent to location sharing when
-// prompted by your browser. If you see a blank space instead of the map, this
-// is probably because you have denied permission for location sharing.
-
 var MAP_CLASS_NAME = "google-map";
-var DEFAULT_LAT = 60;
-var DEFAULT_LNG = 105;
+// Sunset Beach Bar
+var DEFAULT_LAT = 18.038246;
+var DEFAULT_LNG = -63.120034;
+
+function debug(s) {
+	console.log(s);
+}
+
+function warn(s) {
+	console.log(s);
+}
+
+
 /**
  * Convert the given string to a dictionary.  Fields are in the form key1=val1;key2=val2;...
  * @param {Object} s
@@ -29,25 +37,24 @@ function toDict(s) {
 		});
 
 	} catch(ex) {
-		console.log("Invalid dictionary form: '" + s + "'");
+		warn("Invalid dictionary form: '" + s + "'");
 	}
 	return d;
 }
 
-
-
+/**
+ *  A wrapper for Google maps.
+ */
 function G11Map(el, mapOptions) {
 	this.mapOptions = mapOptions;
 	this.map = new google.maps.Map(el, mapOptions);
 	this.points = [];
 	this.markers = {};
 	this.timeout = null;
-
 	// Explicit lat/lon provided
 	if (mapOptions.lat && mapOptions.lon) {
 		this.setCenter(mapOptions.lat, mapOptions.lon);
-
-		// Try HTML5 geolocation
+	// Try HTML5 geolocation
 	} else if (navigator.geolocation) {
 		var self = this;
 		navigator.geolocation.getCurrentPosition(function(position) {
@@ -55,22 +62,14 @@ function G11Map(el, mapOptions) {
 		}, function() {
 			self.setCenter(DEFAULT_LAT, DEFAULT_LNG);
 		});
-		// Browser doesn't support Geolocation
+	// Browser doesn't support Geolocation
 	} else {
 		this.setCenter(DEFAULT_LAT, DEFAULT_LNG);
 	}
 }
 
-/*
-G11Map.prototype.setCenter = function(lat, lng) {
-	
-};
-*/
-
 /**
- * Loads markers for the map, optionally centering on the given lat/lon 
- * @param {Object} lat
- * @param {Object} lng
+ * Centers the map on lat/lng
  */
 G11Map.prototype.setCenter = function(lat, lng) {
 	var nc = new google.maps.LatLng(lat, lng);
@@ -82,24 +81,21 @@ G11Map.prototype.setCenter = function(lat, lng) {
 	
 };
 
+/**
+ * Renders the given marker data on the map, removing existing markers 
+ */
 G11Map.prototype.renderMarkerData = function(points) {
-	console.log('Received ' + points.length + ' points' );
+	debug('Received ' + points.length + ' points' );
 	points = _.sortBy(points, function(p) {return p.obj._id;}); // Sort the incoming points by ID
 	var ar = added_and_removed(this.points, points, function(o, n) { return o.obj._id.localeCompare(n.obj._id); }); // Compare incoming with current
 	var added = ar[0];
 	var removed = ar[1];
 	var self = this;
-	// Clear markers for points no longer in data
-	//console.log("Removed:");
-	//console.log(removed);
-	//console.log("Added:");
-	//console.log(added);
 	_.each(removed, function(p) {
 		self.markers[p.obj._id].setMap(null);
 		self.markers[p.obj._id] = null;
 	});
 	// For each new point
-
 	_.each(added, function(p) {
 		var page = p.obj;
 		// Create marker
@@ -124,26 +120,19 @@ G11Map.prototype.renderMarkerData = function(points) {
 	this.points = points;
 };
 
+/**
+ * Loads markers for the given lat/lng 
+ */
 G11Map.prototype.loadMarkersFor = function (lat, lng) {
-	
-	console.log('Loading markers for ' + lat + ',' + lng);
-	
+	debug('Loading markers for ' + lat + ',' + lng);
 	var self = this;
-	// $.ajax({
-		// url : "/near/" + lat + "/" + lng,
-		// success : function(data) {
-			// self.renderMarkerData(data);
-		// }
-	// });
-	
 	promise.get("/near/" + lat + "/" + lng).then(function(error, data, xhr) {
 		if (error) {
-			alert('Error ' + xhr.status);
+			warn('Error ' + xhr.status);
 			return;
 		}
 		self.renderMarkerData(JSON.parse(data));
 	}); 
-
 };
 
 /**
@@ -154,45 +143,38 @@ G11Map.prototype.loadMarkersFor = function (lat, lng) {
  *  - The list of items that have been removed
  */
 function added_and_removed(old_list, new_list, cmp) {
-	//console.log(old_list);
-	//console.log(new_list);
 	var added = [], removed = [];
 	var ptro = 0, ptrn = 0;
 	while (ptro < old_list.length && ptrn < new_list.length) {
-		//console.log("Comparing "+old_list[ptro]+" to "+new_list[ptrn]);
-		if (cmp(old_list[ptro], new_list[ptrn]) < 0) { // Item is missing from new
-			//console.log("Item removed: "+old_list[ptro]);
+		// Item is missing from new
+		if (cmp(old_list[ptro], new_list[ptrn]) < 0) { 
 			removed.push(old_list[ptro]);
 			ptro += 1;
-		} else if (cmp(old_list[ptro], new_list[ptrn]) > 0) { // Item is newly added
-			//console.log("Item added: "+new_list[ptrn]);
+		// Item is newly added
+		} else if (cmp(old_list[ptro], new_list[ptrn]) > 0) { 
 			added.push(new_list[ptrn]);
 			ptrn += 1;
+		// Items match
 		} else {
-			//console.log("Items equal: "+new_list[ptrn]);
 			ptro += 1;
 			ptrn += 1;
 		}
 	}
+	// If old list has tail, they were all removed
 	if (ptro < old_list.length) {
-		//console.log("Removed:");
-		//console.log(old_list.slice(ptro));
-		removed = removed.concat(old_list.slice(ptro)); // Removed
+		removed = removed.concat(old_list.slice(ptro));
 	}
+	// If new list has tail, they were all added
 	if (ptrn < new_list.length) {
-		//console.log("Added:");
-		//console.log(new_list.slice(ptrn));
-		added = added.concat(new_list.slice(ptrn)); // Added
+		added = added.concat(new_list.slice(ptrn));
 	}
 	return [ added, removed ];
 }
 
-//ar = added_and_removed(["1", "22", "333", "4444", "666666"], ["22", "333", "55555", "666666", "7777777"], 'length');
-//console.log(ar[0]);
-//console.log(ar[1]);
-
 function initialize() {
+	// Find all declared map elements and assign a new G11 Map to each
 	_.each(document.getElementsByClassName(MAP_CLASS_NAME), function(el) {
+		// Convert data-options attribute to map options
 		var mapOptions = el.getAttribute("data-options");
 		if (mapOptions) {
 			mapOptions = toDict(mapOptions);
@@ -202,17 +184,16 @@ function initialize() {
 		if (!mapOptions.zoom) {
 			mapOptions.zoom = 12;
 		}
-		//console.log("Found Google Map element:");
-		//console.log(el);
+		debug("Initializing Google Map element:");
+		debug(el);
 		var g11map = new G11Map(el, mapOptions);
+		// Add a listener so that if the center 
 		google.maps.event.addListener(g11map.map, 'center_changed', function() {
 			if (g11map.timeout !== null) {
 				return;
 			}
 			g11map.timeout = window.setTimeout(function() {
 				c = g11map.map.getCenter();
-				console.log("Center changed:");
-				console.log(c);
 				g11map.loadMarkersFor(c.lat(), c.lng());
 				g11map.timeout = null;
 			}, 500);
