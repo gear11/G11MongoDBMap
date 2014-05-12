@@ -1,64 +1,49 @@
 /**
- * A JS file for creating declarative Google Maps.
+ * A JS file for creating declarative Google Maps bound to a REST data source.
  * 
- * Depends on the GoogleMaps API, and includes underscore and promisejs, no jQuery required. 20KB min. 
+ * Depends on the GoogleMaps API, and includes underscore and promisejs, no jQuery required. 20KB minimized. 
  */
 var _ = require('../bower_components/underscore/underscore.js');
 var promise = require('../bower_components/promisejs/promise.js').promise;
 
-var MAP_CLASS_NAME = "google-map";
-// Sunset Beach Bar
+// Base URL for the REST service
+var BASE_POINTS_URL = "/all/points/near/";
+
+// Default map location: Sunset Beach Bar
 var DEFAULT_LAT = 18.038246;
 var DEFAULT_LNG = -63.120034;
 
-var LOG = (function() {
-	var log = function(s) {
-		if (typeof(console) != "undefined") {
-			console.log(s);
-		}
-	};
-	return {
-		debug_on: true,
-		debug: function(s) {
-			if (this.debug_on) {
-				log(s);
+// CSS class for where to insert Google Map
+var MAP_CLASS_NAME = "g11-google-map";
+
+// Initialize page on load
+google.maps.event.addDomListener(window, 'load', initialize_page_map_elements);
+function initialize_page_map_elements() {
+	// Find all declared map elements and assign a new G11 Map to each
+	_.each(document.getElementsByClassName(MAP_CLASS_NAME), function(el) {
+		// Convert data-options attribute to map options
+		LOG.debug("Initializing Google Map element");
+		//LOG.debug(el);
+		var g11map = new G11Map(el, { zoom: 12 });
+		// Add a listener so that if the center of the map is moved, we fetch markers.
+		google.maps.event.addListener(g11map.map, 'center_changed', function() {
+			// Ignore the event if a timeout is pending
+			if (g11map.timeout !== null) {
+				return;
 			}
-		},
-		info: function(s) {
-			log(s);
-		},
-		warn: function(s) {
-			log(s);
-		}
-	};
-})();
-
-
-Math.round_to_places = function(num, places) {
-	var whole = parseInt(num);
-	var dec = Math.round((num - whole)*(10^places));
-	return whole + '.' + dec;
-};
-
-// http://www.movable-type.co.uk/scripts/latlong.html
-function haversine(lat1, lon1, lat2, lon2) {
-	var R = 6371; // km
-	var φ1 = lat1.toRadians();
-	var φ2 = lat2.toRadians();
-	var Δφ = (lat2-lat1).toRadians();
-	var Δλ = (lon2-lon1).toRadians();
-	
-	var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-	        Math.cos(φ1) * Math.cos(φ2) *
-	        Math.sin(Δλ/2) * Math.sin(Δλ/2);
-	var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-	
-	var d = R * c;
-	return d;
+			// Set a timeout to update the map
+			g11map.timeout = window.setTimeout(function() {
+				c = g11map.map.getCenter();
+				g11map.loadMarkersFor(c.lat(), c.lng());
+				g11map.timeout = null;
+			}, 500);
+		});
+	});
 }
 
+
 /**
- *  A wrapper for Google maps.
+ * A wrapper for Google maps that supports loading/rendering markers.
  */
 function G11Map(el, mapOptions) {
 	this.mapOptions = mapOptions;
@@ -84,7 +69,7 @@ function G11Map(el, mapOptions) {
 }
 
 /**
- * Centers the map on lat/lng
+ * Centers the map on the given lat/lng
  */
 G11Map.prototype.setCenter = function(lat, lng) {
 	var nc = new google.maps.LatLng(lat, lng);
@@ -95,40 +80,56 @@ G11Map.prototype.setCenter = function(lat, lng) {
 	this.map.setCenter(nc);
 };
 
+
+/**
+ * Loads markers for the given lat/lng 
+ */
+G11Map.prototype.loadMarkersFor = function (lat, lng) {
+	LOG.debug('Loading markers for ' + lat + ',' + lng);
+	var self = this;
+	var url = BASE_POINTS_URL + lat + "/" + lng;
+	promise.get(url).then(function(error, data, xhr) {
+		if (error) {
+			LOG.warn('Geolocation query '+url+' returned status ' + xhr.status+': ');
+			if (data) {
+				LOG.warn(data);
+			}
+			return;
+		}
+		self.renderMarkerData(JSON.parse(data).points);
+	});
+};
+
 /**
  * Renders the given marker data on the map, removing existing markers 
  */
 G11Map.prototype.renderMarkerData = function(points) {
 	LOG.debug('Received ' + points.length + ' points' );
-	LOG.debug(points);
-	points = _.sortBy(points, function(p) {return p.obj._id;}); // Sort the incoming points by ID
-	var ar = added_and_removed(this.points, points, function(o, n) { return o.obj._id.localeCompare(n.obj._id); }); // Compare incoming with current
+	//LOG.debug(points);
+	points = _.sortBy(points, function(p) {return p._id;}); // Sort the incoming points by ID
+	var ar = added_and_removed(this.points, points, function(o, n) { return o._id.localeCompare(n._id); }); // Compare incoming with current
 	var added = ar[0];
 	var removed = ar[1];
 	var self = this;
+	// For each removed point, remove the corresponding marker
 	_.each(removed, function(p) {
-		self.markers[p.obj._id].setMap(null);
-		self.markers[p.obj._id] = null;
+		self.markers[p._id].setMap(null);
+		self.markers[p._id] = null;
 	});
-	// For each new point
+	// For each added point, add a marker
 	_.each(added, function(p) {
-		var page = p.obj;
 		// Create marker
-		var coord = page.loc.coordinates;
+		var coord = p.loc.coordinates;
 		var marker = new google.maps.Marker({
 			position : new google.maps.LatLng(coord[1], coord[0]),
 			map : self.map,
-			title : page.title,
+			title : p.title,
 			icon: 'images/blue_dot.png'
 		});
-		self.markers[page._id] = marker;
-		// Update distance as distance from the original point
-		
-		var miles = Math.round_to_places(p.dis * 3959, 2);
-		var km = Math.round_to_places(p.dis * 6371, 2);
+		self.markers[p._id] = marker;
 		// Create an info box
 		var infowindow = new google.maps.InfoWindow({
-			content : '<a href="' + page.url + '"><h3>' + page.title + '</h3></a><p>Distance: ' + miles + 'mi ('+km+'km)</p>'
+			content : '<a href="' + p.url + '"><h3>' + p.title + '</h3></a><p>Source: '+p.source+'</p>'
 		});
 		// Show info box on point click
 		google.maps.event.addListener(marker, 'click', function() {
@@ -139,27 +140,23 @@ G11Map.prototype.renderMarkerData = function(points) {
 	this.points = points;
 };
 
+// Utility functions
 
 /**
- * Loads markers for the given lat/lng 
+ * Simple, browser-safe logging 
  */
-G11Map.prototype.loadMarkersFor = function (lat, lng) {
-	LOG.debug('Loading markers for ' + lat + ',' + lng);
-	var self = this;
-	var url = "/all/points/near/" + lat + "/" + lng;
-	promise.get(url).then(function(error, data, xhr) {
-		if (error) {
-			LOG.warn('Geolocation query '+url+' returned status ' + xhr.status+': ');
-			if (data) {
-				LOG.warn(data);
-			}
-			return;
-		}
-		self.renderMarkerData(JSON.parse(data).points);
-
-		
-	});
-};
+var LOG = (function() {
+	var log = function(s) {
+		if (typeof(console) != "undefined") { console.log(s); }
+	};
+	return {
+		debug_on: true,
+		debug: function(s) {
+			if (this.debug_on) { log(s); }
+		},
+		warn: function(s) { log(s); }
+	};
+})();
 
 /**
  * Accepts 2 lists and the comparison func by which they have been sorted,
@@ -196,27 +193,3 @@ function added_and_removed(old_list, new_list, cmp) {
 	}
 	return [ added, removed ];
 }
-
-function initialize() {
-	// Find all declared map elements and assign a new G11 Map to each
-	_.each(document.getElementsByClassName(MAP_CLASS_NAME), function(el) {
-		// Convert data-options attribute to map options
-		LOG.debug("Initializing Google Map element:");
-		LOG.debug(el);
-		var g11map = new G11Map(el, { zoom: 12 });
-		// Add a listener so that if the center 
-		google.maps.event.addListener(g11map.map, 'center_changed', function() {
-			if (g11map.timeout !== null) {
-				return;
-			}
-			g11map.timeout = window.setTimeout(function() {
-				c = g11map.map.getCenter();
-				g11map.loadMarkersFor(c.lat(), c.lng());
-				g11map.timeout = null;
-			}, 500);
-		});
-	});
-}
-
-google.maps.event.addDomListener(window, 'load', initialize);
-

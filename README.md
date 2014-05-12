@@ -1,4 +1,7 @@
-## Python Flask Skeleton for Google App Engine
+## G11 Mongo Map
+
+An example of using Google Maps to display data from MongoDB.
+
 
 A skeleton for building Python applications on Google App Engine with the
 [Flask micro framework](http://flask.pocoo.org).

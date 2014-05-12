@@ -9,13 +9,13 @@ var rename = require('gulp-rename');
 var browserify = require('gulp-browserify');
 
 var paths = {
-  scripts: ['web/js/*.js', 'https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true']
+  scripts: 'web/js/*.js'
 };
 
 
 // Lint Task
 gulp.task('lint', function() {
-    return gulp.src(paths.scripts[0])
+    return gulp.src(paths.scripts)
         .pipe(jshint())
         .pipe(jshint.reporter('default'));
 });
@@ -23,8 +23,8 @@ gulp.task('lint', function() {
 
 // Concatenate & Minify JS
 gulp.task('scripts', function() {
-    return gulp.src(paths.scripts[0])
-        .pipe(browserify({ debug: true }))
+    return gulp.src(paths.scripts)
+        .pipe(browserify({ debug: false }))
         .pipe(gulp.dest('dist'))
         .pipe(rename('g11-maps.min.js'))
         .pipe(uglify())
