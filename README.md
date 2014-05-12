@@ -1,4 +1,4 @@
-## G11 Mongo Map
+## G11 MongoDB Map
 
 An example of using Google Maps to display data from MongoDB.
 
