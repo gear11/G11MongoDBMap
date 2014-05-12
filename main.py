@@ -11,14 +11,15 @@ from functools import wraps
 import os
 
 def returns_json(f):
+    """An annotation that causes the content-type of Flask endpoints to return text/json"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         r = f(*args, **kwargs)
         return Response(r, content_type='text/json')
     return decorated_function
 
-# Workaround a bug in the float conversion
 class FloatConverter(BaseFloatConverter):
+    """Flask float conversion doesn't handle negatives, so we need to fix it, oops!"""
     regex = r'-?\d+(\.\d+)?'
 
 app = Flask(__name__, static_folder='web')
@@ -47,6 +48,7 @@ def mongodb():
     return g.mongodb
 
 def coll_name():
+    """The MongoDB collection where our location data is stored"""
     return app.config['MONGO_DB_COLL']
 
 @app.route('/')
@@ -65,7 +67,7 @@ def near(lat, lon):
 @app.errorhandler(404)
 def page_not_found(e):
     """Return a custom 404 error."""
-    return 'FOO Sorry, Nothing at this URL.', 404
+    return 'Sorry, Nothing at this URL.', 404
 
 # Custom static data
 @app.route('/dist/g11-maps.min.js')
