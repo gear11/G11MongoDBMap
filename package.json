@@ -1,0 +1,14 @@
+{
+  "description" : "This file is used by NPM to install gulp and other JS tools one time at project setup.  'npm install' in this dir.",
+  "name": "G11WikipMap",
+  "version": "0.0.1",
+  "repository" : { "type" : "git", "url" : "https://github.com/gear11/G11WikipMap.git" },
+  "author": "andy@gear11.com",
+  "devDependencies": {
+    "gulp": "^3.6.2",
+    "gulp-jshint": "^1.5.5",
+    "gulp-browserify": "^0.5.0",
+    "gulp-rename": "^1.2.0",
+    "gulp-uglify": "^0.3.0"
+  }
+}

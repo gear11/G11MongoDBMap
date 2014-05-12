@@ -1,0 +1,8 @@
+{
+  "name": "G11WikipMap",
+  "version": "0.0.1",
+  "dependencies": {
+    "promisejs": "https://github.com/stackp/promisejs.git",
+    "underscore": "^1.6.0"
+  }
+}
