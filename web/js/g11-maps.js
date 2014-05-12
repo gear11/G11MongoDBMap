@@ -4,41 +4,56 @@
  * Depends on the GoogleMaps API, and includes underscore and promisejs, no jQuery required. 20KB min. 
  */
 var _ = require('../bower_components/underscore/underscore.js');
-var promise = require('../bower_components/promise.min/index.js').promise;
+var promise = require('../bower_components/promisejs/promise.js').promise;
+
 var MAP_CLASS_NAME = "google-map";
 // Sunset Beach Bar
 var DEFAULT_LAT = 18.038246;
 var DEFAULT_LNG = -63.120034;
 
-function debug(s) {
-	console.log(s);
-}
-
-function warn(s) {
-	console.log(s);
-}
-
-
-/**
- * Convert the given string to a dictionary.  Fields are in the form key1=val1;key2=val2;...
- * @param {Object} s
- */
-function toDict(s) {
-	d = {};
-	try {
-		_.each(s.split(';'), function(term) {
-			var n = term.indexOf('=');
-			var val = term.substring(n + 1);
-			var floatVal = parseFloat(val);
-			if (!isNaN(floatVal)) {
-				val = floatVal;
+var LOG = (function() {
+	var log = function(s) {
+		if (typeof(console) != "undefined") {
+			console.log(s);
+		}
+	};
+	return {
+		debug_on: true,
+		debug: function(s) {
+			if (this.debug_on) {
+				log(s);
 			}
-			d[term.substring(0, n)] = val;
-		});
+		},
+		info: function(s) {
+			log(s);
+		},
+		warn: function(s) {
+			log(s);
+		}
+	};
+})();
 
-	} catch(ex) {
-		warn("Invalid dictionary form: '" + s + "'");
-	}
+
+Math.round_to_places = function(num, places) {
+	var whole = parseInt(num);
+	var dec = Math.round((num - whole)*(10^places));
+	return whole + '.' + dec;
+};
+
+// http://www.movable-type.co.uk/scripts/latlong.html
+function haversine(lat1, lon1, lat2, lon2) {
+	var R = 6371; // km
+	var φ1 = lat1.toRadians();
+	var φ2 = lat2.toRadians();
+	var Δφ = (lat2-lat1).toRadians();
+	var Δλ = (lon2-lon1).toRadians();
+	
+	var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+	        Math.cos(φ1) * Math.cos(φ2) *
+	        Math.sin(Δλ/2) * Math.sin(Δλ/2);
+	var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+	
+	var d = R * c;
 	return d;
 }
 
@@ -78,14 +93,14 @@ G11Map.prototype.setCenter = function(lat, lng) {
 		return; // No update
 	}
 	this.map.setCenter(nc);
-	
 };
 
 /**
  * Renders the given marker data on the map, removing existing markers 
  */
 G11Map.prototype.renderMarkerData = function(points) {
-	debug('Received ' + points.length + ' points' );
+	LOG.debug('Received ' + points.length + ' points' );
+	LOG.debug(points);
 	points = _.sortBy(points, function(p) {return p.obj._id;}); // Sort the incoming points by ID
 	var ar = added_and_removed(this.points, points, function(o, n) { return o.obj._id.localeCompare(n.obj._id); }); // Compare incoming with current
 	var added = ar[0];
@@ -107,9 +122,13 @@ G11Map.prototype.renderMarkerData = function(points) {
 			icon: 'images/blue_dot.png'
 		});
 		self.markers[page._id] = marker;
+		// Update distance as distance from the original point
+		
+		var miles = Math.round_to_places(p.dis * 3959, 2);
+		var km = Math.round_to_places(p.dis * 6371, 2);
 		// Create an info box
 		var infowindow = new google.maps.InfoWindow({
-			content : '<a href="' + page.url + '"><h3>' + page.title + '</h3></a><p>Distance: ' + p.dis + '</p>'
+			content : '<a href="' + page.url + '"><h3>' + page.title + '</h3></a><p>Distance: ' + miles + 'mi ('+km+'km)</p>'
 		});
 		// Show info box on point click
 		google.maps.event.addListener(marker, 'click', function() {
@@ -120,19 +139,26 @@ G11Map.prototype.renderMarkerData = function(points) {
 	this.points = points;
 };
 
+
 /**
  * Loads markers for the given lat/lng 
  */
 G11Map.prototype.loadMarkersFor = function (lat, lng) {
-	debug('Loading markers for ' + lat + ',' + lng);
+	LOG.debug('Loading markers for ' + lat + ',' + lng);
 	var self = this;
-	promise.get("/near/" + lat + "/" + lng).then(function(error, data, xhr) {
+	var url = "/all/points/near/" + lat + "/" + lng;
+	promise.get(url).then(function(error, data, xhr) {
 		if (error) {
-			warn('Error ' + xhr.status);
+			LOG.warn('Geolocation query '+url+' returned status ' + xhr.status+': ');
+			if (data) {
+				LOG.warn(data);
+			}
 			return;
 		}
-		self.renderMarkerData(JSON.parse(data));
-	}); 
+		self.renderMarkerData(JSON.parse(data).points);
+
+		
+	});
 };
 
 /**
@@ -175,18 +201,9 @@ function initialize() {
 	// Find all declared map elements and assign a new G11 Map to each
 	_.each(document.getElementsByClassName(MAP_CLASS_NAME), function(el) {
 		// Convert data-options attribute to map options
-		var mapOptions = el.getAttribute("data-options");
-		if (mapOptions) {
-			mapOptions = toDict(mapOptions);
-		} else {
-			mapOptions = {};
-		}
-		if (!mapOptions.zoom) {
-			mapOptions.zoom = 12;
-		}
-		debug("Initializing Google Map element:");
-		debug(el);
-		var g11map = new G11Map(el, mapOptions);
+		LOG.debug("Initializing Google Map element:");
+		LOG.debug(el);
+		var g11map = new G11Map(el, { zoom: 12 });
 		// Add a listener so that if the center 
 		google.maps.event.addListener(g11map.map, 'center_changed', function() {
 			if (g11map.timeout !== null) {
