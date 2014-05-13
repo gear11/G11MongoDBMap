@@ -1,5 +1,5 @@
 """A Flask server that presents a REST interface to the MongoDB geoNear command."""
-from flask import Flask, g, Response, send_from_directory
+from flask import Flask, g, Response, send_from_directory, redirect, url_for
 import pymongo
 from pymongo.errors import ConnectionFailure
 from bson.son import SON
@@ -55,6 +55,9 @@ def connect_mongo_db():
 def coll_name():
     return app.config['MONGO_DB_COLL']
 
+@app.route('/')
+def index():
+    return redirect("web/index.html")
 
 @app.route('/all/points/near/<float:lat>/<float:lon>')
 @returns_json
