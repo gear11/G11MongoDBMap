@@ -1,6 +1,7 @@
 ## G11 MongoDB Map
 
-An example of using Google Maps to display data from MongoDB.
+An example of using Google Maps to display data from MongoDB.  For background, see:
+http://gear11.com/2014/05/mongodb-location-google-map/
 
 This project is pase on the Flask skeleton for Google App Engine (https://github.com/GoogleCloudPlatform/appengine-python-flask-skeleton.git).
 
